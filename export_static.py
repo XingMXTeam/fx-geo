@@ -61,10 +61,20 @@ window.__GEO_DATA__ = __GEO_DATA_JSON__;
 """
 
 
+TABLER_MARKER = "/*__TABLER_CSS__*/"
+
+
+def inject_tabler(html):
+    """把 vendored 的 Tabler CSS 填进 panel.html 的占位标记，保证导出单文件自包含。"""
+    with open(os.path.join(BASE, "vendor", "tabler.min.css"), encoding="utf-8") as f:
+        return html.replace(TABLER_MARKER, f.read(), 1)
+
+
 def build(out_path, supabase_url=None, anon_key=None):
     data = collect_data()
     with open(os.path.join(BASE, "panel.html"), encoding="utf-8") as f:
         html = f.read()
+    html = inject_tabler(html)
 
     # 仅静态版加 noindex（本地 panel.html 不动）
     html = html.replace(

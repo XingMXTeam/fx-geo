@@ -1,0 +1,16 @@
+Vendored third-party assets
+===========================
+
+tabler.min.css
+--------------
+Tabler v1.4.0 (https://tabler.io)
+Source: https://cdn.jsdelivr.net/npm/@tabler/core@1.4.0/dist/css/tabler.min.css
+Upstream: https://github.com/tabler/tabler
+Copyright 2018-2025 The Tabler Authors
+Copyright 2018-2025 codecalm.net Paweł Kuna
+License: MIT (https://github.com/tabler/tabler/blob/master/LICENSE)
+
+Used as the UI kit for the fx-geo panel: layout, cards, badges, tables and
+progress bars. The file is vendored unmodified; export_static.py inlines it
+into the exported static HTML so the deployed page stays a single
+self-contained file. No Tabler JS is used.

@@ -7,7 +7,7 @@ import json
 import os
 
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from db import connect, init_db
 
@@ -147,7 +147,13 @@ def sources():
 
 @app.get("/")
 def panel():
-    return FileResponse(os.path.join(BASE, "panel.html"), media_type="text/html")
+    # panel.html 里的 /*__TABLER_CSS__*/ 占位标记在出页面时填入 vendored 的 Tabler CSS，
+    # 与静态导出（export_static.inject_tabler）同一口径；下方 API 函数与此无关。
+    with open(os.path.join(BASE, "panel.html"), encoding="utf-8") as f:
+        html = f.read()
+    with open(os.path.join(BASE, "vendor", "tabler.min.css"), encoding="utf-8") as f:
+        html = html.replace("/*__TABLER_CSS__*/", f.read(), 1)
+    return HTMLResponse(html)
 
 
 if __name__ == "__main__":

@@ -18,7 +18,10 @@ cd ~/workspace/geo-system
 geo-system/
 ├── app.py            # FastAPI：面板 + /api/* JSON
 ├── export_static.py  # 静态导出：数据内嵌 + fetch 垫片，生成自包含 HTML（见下）
-├── panel.html        # 单页中文面板（深色简洁），由 app.py 在 / 返回
+├── panel.html        # 单页中文面板（Tabler 仪表盘布局），由 app.py 在 / 返回
+├── vendor/
+│   ├── tabler.min.css  # Tabler v1.4.0 CSS（vendored，MIT；出页面时内联，见「UI 模板」）
+│   └── NOTICE          # 第三方资产出处与许可
 ├── db.py             # SQLite schema（按 v3 §6.1 简化；生产版见 supabase/schema.sql）
 ├── seed.py           # 种子：解析审计 JSON + 冻结 prompt md + 样板基线 + 战报，只灌真实数据
 ├── supabase/
@@ -32,6 +35,15 @@ geo-system/
 ├── .env.example      # 后续接 key 的位置（只列名，不写值）
 ├── VERIFY.log        # 启动/API 断言验证输出（本地生成，不进仓库；geo.db 同理由 seed.py 再生，不进仓库）
 └── panel.png         # 面板截图（headless chromium）
+
+## UI 模板（Tabler）
+
+面板 UI 套用开源仪表盘套件 **Tabler v1.4.0**（MIT，github.com/tabler/tabler）：
+深色左侧边栏 + 浅色内容区、KPI 卡、状态徽章、表格与进度条均为 Tabler 组件语言。
+CSS 以 vendored 方式存放在 `vendor/tabler.min.css`（未修改，出处见 `vendor/NOTICE`），
+不引入 Tabler JS（边栏折叠、导航高亮、顶栏数据模式探测均为少量原生 JS）。
+`panel.html` 里以 `/*__TABLER_CSS__*/` 占位标记引用它：本地由 `app.py` 出页面时填入，
+静态导出由 `export_static.py` 内联进 HTML，保证部署页仍是单文件自包含。
 
 ## 静态导出（部署到主站 /geo/）
 
