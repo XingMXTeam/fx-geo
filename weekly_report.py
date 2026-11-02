@@ -31,6 +31,57 @@ def latest_gate_rows(conn: sqlite3.Connection) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def audit_label(site: dict) -> str:
+    """周报中审计分数的站点短名，与既有文案口径保持一致。"""
+    if site.get("role") == "主站":
+        return "主站"
+    if site.get("domain", "").startswith("crossagent."):
+        return "Lab"
+    return site.get("name") or site.get("domain") or "站点"
+
+
+def audit_run_date(audit: dict) -> str:
+    """把 audits.run_at（UTC ISO 时间）换算为 Asia/Shanghai 日期。"""
+    raw = (audit.get("run_at") or "").strip()
+    if not raw:
+        return "日期未记录"
+    try:
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return raw[:10]
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(CST).date().isoformat()
+
+
+def latest_audit_facts(sites: list[dict], audits: dict[str, dict]) -> tuple[str, list[tuple[str, int]]]:
+    """只从 audits 最新行组装审计日期与分数，禁止从状态文本摘分数。"""
+    facts: list[tuple[str, int]] = []
+    dates: list[str] = []
+    for site in sites:
+        audit = audits.get(site["domain"])
+        if audit and audit.get("score") is not None:
+            facts.append((audit_label(site), int(audit["score"])))
+            dates.append(audit_run_date(audit))
+    return (max(dates) if dates else "日期未记录", facts)
+
+
+def audit_detail_text(sites: list[dict], audits: dict[str, dict]) -> str:
+    date, facts = latest_audit_facts(sites, audits)
+    if not facts:
+        return "暂无审计记录"
+    scores = "、".join(f"{label} {score} 分" for label, score in facts)
+    return f"{date} 已实跑双站：{scores}（卫生分，不预测引用）"
+
+
+def audit_score_text(sites: list[dict], audits: dict[str, dict]) -> str:
+    date, facts = latest_audit_facts(sites, audits)
+    if not facts:
+        return "暂无审计记录"
+    scores = " / ".join(f"{label} {score}" for label, score in facts)
+    return f"{date} 实跑：{scores}（卫生分）"
+
+
 def gemini_status() -> dict:
     meta_path = os.path.join(GEMINI_DIR, "run-meta.json")
     if not os.path.exists(meta_path):
@@ -76,7 +127,8 @@ def build_report(conn: sqlite3.Connection, week_label: str) -> str:
     add(f"# GEO 周报 · {week_label}（第一期）")
     add("")
     add(f"- 生成时间：{gates.now_iso()}（weekly_report.py 自动生成，数据源：geo.db + GSC pull + 基线目录）")
-    add(f"- 数据截至：审计 2026-11-02 实跑；GSC 窗口 {ev.get('window', '不可用')}；采样见 §2")
+    audit_date, _ = latest_audit_facts(sites, audits)
+    add(f"- 数据截至：审计 {audit_date} 实跑；GSC 窗口 {ev.get('window', '不可用')}；采样见 §2")
     add("")
     add("## 0. 一句话结论")
     add("")
@@ -93,7 +145,9 @@ def build_report(conn: sqlite3.Connection, week_label: str) -> str:
     add("| 数据源 | 状态 | 最新实测 |")
     add("|---|---|---|")
     for s in sources:
-        add(f"| {s['label']} | {s['status']} | {s['detail']} |")
+        # 审计分数只能取 audits 最新行；source_status.detail 是状态说明，可能滞后，禁止从中摘分数。
+        detail = audit_detail_text(sites, audits) if s["source"] == "audit" else s["detail"]
+        add(f"| {s['label']} | {s['status']} | {detail} |")
     if ev.get("available"):
         add(f"| GSC 28 天 totals（本次 pull） | 已实拉 | 展示 {ev['impressions_28d']}、"
             f"点击 {ev['clicks_28d']}、平均排名 {ev['position_avg']:.1f}、折周曝光约 {weekly_impr:.2f}/周 |")
@@ -175,7 +229,7 @@ def build_report(conn: sqlite3.Connection, week_label: str) -> str:
     add("| 两站 GSC 28 天导出 | 已达 | 2026-11-02 实拉 pull JSON（sc-domain 合并口径，含 CrossAgent 子域页面行） |")
     add("| GSC 每日 cron 入库 | 未达（第 1 天） | token 2026-11-02 才恢复、cron 同日建；连续 7 天要到约 2026-11-09 |")
     add("| Bing Webmaster sitemap + AI Performance CSV | 未达 | 未提交、未导（source_status：bing 未接入） |")
-    add("| geo-optimizer 两站审计 | 已达 | 2026-11-02 实跑：主站 62 / Lab 65（卫生分） |")
+    add(f"| geo-optimizer 两站审计 | 已达 | {audit_score_text(sites, audits)} |")
     add("| robots/CDN 放行核查 | 已达 | 审计 robots 分类已覆盖；Lab 具名缺行见 findings/H-004 |")
     add("| 25 条 prompt 冻结 | 已达 | 冻结集 v1（两站各 25 条） |")
     add("| 采样基线（判定口径 ≥5 次/引擎） | 未达 | Gemini grounding 调用 429 配额停批，0 有效样本；Perplexity 未配置 |")
