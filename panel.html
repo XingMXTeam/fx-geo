@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GEO 闭环系统 · MVP 面板</title>
+<style>
+  :root { --bg:#0e1116; --card:#171c24; --line:#262e3a; --txt:#dbe2ec; --dim:#8b96a5;
+          --ok:#3fb96f; --warn:#e0a63f; --bad:#e05c5c; --accent:#5aa2ff; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--txt);
+         font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif; font-size:14px; }
+  .wrap { max-width:1180px; margin:0 auto; padding:20px 16px 40px; }
+  h1 { font-size:20px; margin:4px 0 2px; }
+  h2 { font-size:15px; margin:26px 0 10px; border-left:3px solid var(--accent); padding-left:8px; }
+  .dim { color:var(--dim); font-size:12px; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  @media (max-width:760px){ .grid{grid-template-columns:1fr;} }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; }
+  .score { font-size:30px; font-weight:700; }
+  .tag { display:inline-block; padding:1px 8px; border-radius:20px; font-size:12px; border:1px solid var(--line); }
+  .ok { color:var(--ok); } .warn { color:var(--warn); } .bad { color:var(--bad); }
+  table { width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+  th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--dim); font-weight:600; font-size:12px; }
+  tr:last-child td { border-bottom:none; }
+  .funnel { display:grid; grid-template-columns:repeat(7,1fr); gap:8px; }
+  @media (max-width:900px){ .funnel{grid-template-columns:repeat(2,1fr);} }
+  .fstep { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px; min-height:96px; }
+  .fstep b { display:block; font-size:13px; margin-bottom:4px; }
+  details { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 14px; margin-bottom:8px; }
+  summary { cursor:pointer; font-weight:600; }
+  details table { background:transparent; border:none; }
+  details th { width:110px; }
+  .tabs button { background:var(--card); color:var(--txt); border:1px solid var(--line); border-radius:8px;
+                 padding:6px 14px; margin-right:8px; cursor:pointer; }
+  .tabs button.on { border-color:var(--accent); color:var(--accent); }
+  ol.prompts { margin:6px 0 0; padding-left:22px; } ol.prompts li { margin:3px 0; }
+  .cat { color:var(--accent); font-size:12px; margin-top:10px; }
+  footer { margin-top:34px; color:var(--dim); font-size:12px; border-top:1px solid var(--line); padding-top:10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>GEO 闭环系统 · MVP 面板</h1>
+  <div class="dim">没有数据就不许动手：测量 → 诊断 → 假设卡 → 闸门 → 实验 → 复测归因。未接入的数据源如实标「未接入」，不显示假数字。</div>
+
+  <h2>站点总览</h2>
+  <div class="grid" id="sites"></div>
+
+  <h2>数据源接入状态</h2>
+  <table><thead><tr><th>数据源</th><th>状态</th><th>说明</th><th>下一步</th></tr></thead>
+  <tbody id="sources"></tbody></table>
+
+  <h2>L1–L7 漏斗</h2>
+  <div class="funnel" id="funnel"></div>
+
+  <h2>诊断问题清单（findings）</h2>
+  <table><thead><tr><th>站</th><th>层</th><th>问题</th><th>证据</th></tr></thead>
+  <tbody id="findings"></tbody></table>
+
+  <h2>假设卡（draft · 未过闸门不排期）</h2>
+  <div id="hyps"></div>
+
+  <h2>基线快照</h2>
+  <div id="baselines"></div>
+
+  <h2>Prompt 集（冻结 v1）</h2>
+  <div class="tabs" id="ptabs"></div>
+  <div class="card" id="plist"></div>
+
+  <h2>规则库</h2>
+  <table><thead><tr><th>规则</th><th>内容</th><th>证据等级</th><th>来源</th></tr></thead>
+  <tbody id="rules"></tbody></table>
+
+  <footer>数据截至 2026-11-02（审计与基线均为该日前的实测留档）。审计分是<b>卫生分，不预测引用</b>。
+  key 配置后 collectors（GSC / citations / 日志）接入同一数据库，本面板自动更新。</footer>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => (s ?? '').toString().replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const stTag = s => s === '已接入' ? '<span class="tag ok">已接入</span>'
+  : '<span class="tag bad">' + esc(s) + '</span>';
+let PROMPTS = {};
+
+fetch('/api/overview').then(r => r.json()).then(o => {
+  $('sites').innerHTML = o.sites.map(s => `
+    <div class="card">
+      <div style="font-weight:700;font-size:16px">${esc(s.name)} <span class="dim">${esc(s.domain)}</span></div>
+      <div style="margin:10px 0">审计卫生分 <span class="score">${s.audit ? s.audit.score : '—'}</span>
+        <span class="dim">/ 100（${s.audit ? esc(s.audit.band) : ''}）· 卫生分，不预测引用</span></div>
+      <div class="dim">基线状态：${esc(s.baseline_status)}${s.baseline_count ? `（${s.baseline_count} 条快照）` : ''}
+        · 本站 findings ${s.findings_count} 条 · 未接入数据源 ${s.unconnected_sources} 个</div>
+      <div style="margin-top:8px">北极星：${esc(s.north_star)}</div>
+    </div>`).join('');
+  $('sources').innerHTML = o.sources.map(x => `<tr><td>${esc(x.label)}</td><td>${stTag(x.status)}</td>
+    <td>${esc(x.detail)}</td><td>${esc(x.next_step)}</td></tr>`).join('');
+  $('funnel').innerHTML = o.funnel.map(f => `
+    <div class="fstep"><b>${f.layer} ${esc(f.name)}</b>
+      <div>${f.status === '未接入' ? '<span class="bad">未接入</span>'
+            : f.status === '有问题待修' ? '<span class="warn">有问题待修</span>'
+            : '<span class="warn">' + esc(f.status) + '</span>'}
+        <span class="dim">· findings ${f.findings_count}</span></div>
+      <div class="dim" style="margin-top:4px">${esc(f.note)}</div></div>`).join('');
+  $('rules').innerHTML = o.rules.map(r => `<tr><td>${esc(r.name)}</td><td>${esc(r.statement)}</td>
+    <td>${esc(r.evidence_level)}</td><td>${esc(r.source)}</td></tr>`).join('');
+});
+
+fetch('/api/findings').then(r => r.json()).then(fs => {
+  $('findings').innerHTML = fs.map(f => `<tr>
+    <td>${esc(f.site_domain || f.scope || '—')}</td><td>${esc(f.layer)}</td>
+    <td><b>${esc(f.title)}</b><div class="dim">${esc(f.detail || '')}</div></td>
+    <td class="dim">${esc(f.evidence)}</td></tr>`).join('');
+});
+
+const HROWS = [['假设','hypothesis'],['主指标','primary_metric'],['基线值','baseline_value'],['目标','target'],
+  ['护栏','guardrail'],['成功阈值','threshold'],['对照组','control_group'],['成本','cost'],['停止条件','stop_condition'],['卫生复核备注','hygiene_note']];
+fetch('/api/hypotheses').then(r => r.json()).then(hs => {
+  $('hyps').innerHTML = hs.map(h => `<details>
+    <summary>${esc(h.code)} · ${esc(h.title)} <span class="tag">${esc(h.status)}</span>
+      <span class="dim">${esc(h.layer)} · ${esc(h.scope || '')}</span></summary>
+    <table>${HROWS.map(([k, f]) => `<tr><th>${k}</th><td>${esc(h[f])}</td></tr>`).join('')}</table>
+  </details>`).join('');
+});
+
+Promise.all([
+  fetch('/api/sites/1').then(r => r.json()).catch(() => null),
+  fetch('/api/prompts').then(r => r.json())
+]).then(([ , all]) => {
+  PROMPTS = all;
+  const domains = Object.keys(all);
+  $('ptabs').innerHTML = domains.map((d, i) =>
+    `<button data-d="${esc(d)}" class="${i === 0 ? 'on' : ''}">${esc(d)}（${all[d].length} 题）</button>`).join('');
+  const show = d => {
+    const cats = {};
+    all[d].forEach(p => { (cats[p.category] = cats[p.category] || []).push(p); });
+    $('plist').innerHTML = Object.entries(cats).map(([c, ps]) =>
+      `<div class="cat">${esc(c)}（${ps.length}）</div><ol class="prompts">` +
+      ps.map(p => `<li>${esc(p.text)}</li>`).join('') + '</ol>').join('');
+    document.querySelectorAll('#ptabs button').forEach(b =>
+      b.classList.toggle('on', b.dataset.d === d));
+  };
+  document.querySelectorAll('#ptabs button').forEach(b =>
+    b.onclick = () => show(b.dataset.d));
+  if (domains.length) show(domains[0]);
+});
+
+Promise.all([
+  fetch('/api/sites/2').then(r => r.json()),
+  fetch('/api/sites/1').then(r => r.json())
+]).then(([lab, main]) => {
+  const tbl = s => s.baselines && s.baselines.length ? `
+    <table><thead><tr><th>日期</th><th>引擎</th><th>指标</th><th>对象</th><th>值</th><th>口径</th></tr></thead>
+    <tbody>${s.baselines.map(b => `<tr><td>${esc(b.snapshot_date)}</td><td>${esc(b.engine)}</td>
+      <td>${esc(b.metric)}</td><td>${esc(b.subject)}</td><td><b>${b.value}</b> ${esc(b.unit || '')}</td>
+      <td class="dim">${esc(b.caliber)}</td></tr>`).join('')}</tbody></table>`
+    : '<div class="card">尚无采样——该站还没有任何一轮 AI 可见度采样数据。</div>';
+  $('baselines').innerHTML =
+    `<div class="dim" style="margin:6px 0">CrossAgent Lab（${esc(lab.domain)}）· 来源 ${esc((lab.baselines[0] || {}).source || '')}</div>` + tbl(lab) +
+    `<div class="dim" style="margin:12px 0 6px">主站（${esc(main.domain)}）</div>` + tbl(main);
+});
+</script>
+</body>
+</html>
