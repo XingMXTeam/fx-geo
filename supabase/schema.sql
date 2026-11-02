@@ -143,3 +143,53 @@ drop policy if exists anon_read on public.rules;
 create policy anon_read on public.rules for select to anon using (true);
 
 commit;
+
+-- =====================================================================
+-- P1 增补（2026-11-02，最小闭环）：假设卡状态机字段 + changes + gate_checks
+-- 本节为增量 DDL（IF NOT EXISTS 幂等），不修改上方已灌库的主体定义。
+-- 对应本地 SQLite 迁移：migrations_p1.py（ensure_p1_schema）。
+-- =====================================================================
+begin;
+
+alter table public.hypotheses add column if not exists approved_at text;
+alter table public.hypotheses add column if not exists running_at text;
+alter table public.hypotheses add column if not exists decided_at text;
+alter table public.hypotheses add column if not exists decision text;
+alter table public.hypotheses add column if not exists decision_note text;
+alter table public.hypotheses add column if not exists effect double precision;
+alter table public.hypotheses add column if not exists ci_low double precision;
+alter table public.hypotheses add column if not exists ci_high double precision;
+alter table public.hypotheses add column if not exists window_days integer default 28;
+alter table public.hypotheses add column if not exists expires_at text;
+
+create table if not exists public.changes (
+    id bigint generated always as identity primary key,
+    hypothesis_id bigint references public.hypotheses(id),
+    deployed_at text not null,
+    commit_sha text,
+    urls text,
+    change_type text,
+    description text,
+    gsc_comparison_started integer not null default 0,
+    gsc_comparison_note text,
+    created_at text
+);
+
+create table if not exists public.gate_checks (
+    id bigint generated always as identity primary key,
+    checked_at text not null,
+    gate text not null,
+    subject text not null,
+    verdict text not null,
+    reasons_json text,
+    source text
+);
+
+alter table public.changes enable row level security;
+alter table public.gate_checks enable row level security;
+drop policy if exists anon_read on public.changes;
+create policy anon_read on public.changes for select to anon using (true);
+drop policy if exists anon_read on public.gate_checks;
+create policy anon_read on public.gate_checks for select to anon using (true);
+
+commit;
