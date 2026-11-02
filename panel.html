@@ -199,6 +199,11 @@
     if (audit) {
       audit = Object.assign({}, audit);
       audit.breakdown = jparse(audit.breakdown_json) || {};
+      // 归一化：复测原始 JSON 的 breakdown 是扁平 {key: score}，种子行是 {key:{score,max}}，统一成后者
+      var BD_MAX = {robots: 18, llms: 18, schema: 16, meta: 14, content: 12, signals: 6, ai_discovery: 6, brand_entity: 10};
+      Object.keys(audit.breakdown).forEach(function (k) {
+        if (typeof audit.breakdown[k] === 'number' && BD_MAX[k]) audit.breakdown[k] = {score: audit.breakdown[k], max: BD_MAX[k]};
+      });
       audit.priorities = jparse(audit.priorities_json) || [];
       audit.failures = jparse(audit.failures_json) || [];
       delete audit.breakdown_json; delete audit.priorities_json; delete audit.failures_json;
