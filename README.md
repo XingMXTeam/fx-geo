@@ -19,8 +19,11 @@ geo-system/
 ├── app.py            # FastAPI：面板 + /api/* JSON
 ├── export_static.py  # 静态导出：数据内嵌 + fetch 垫片，生成自包含 HTML（见下）
 ├── panel.html        # 单页中文面板（深色简洁），由 app.py 在 / 返回
-├── db.py             # SQLite schema（按 v3 §6.1 简化，后续可迁 Postgres）
+├── db.py             # SQLite schema（按 v3 §6.1 简化；生产版见 supabase/schema.sql）
 ├── seed.py           # 种子：解析审计 JSON + 冻结 prompt md + 样板基线 + 战报，只灌真实数据
+├── supabase/
+│   ├── schema.sql    # 生产 DDL（Postgres）：8 表 + 索引 + RLS（anon 只读策略）
+│   └── seed.sql      # 与 SQLite 种子逐项一致的 INSERT（由 geo.db 导出核对）
 ├── geo.db            # SQLite 数据库（seed 生成）
 ├── collectors/
 │   ├── gsc.py        # 骨架：检查 ~/.config/mcp-gsc/token.json 是否存在 → 状态
@@ -37,8 +40,30 @@ geo-system/
 ```
 
 从 app 的数据层直接取全部 API JSON，内嵌为 `window.__GEO_DATA__`，并在页头注入一小段
-fetch 垫片（`/api/*` 优先读内嵌数据），panel.html 本体零改动。静态版额外带
+fetch 垫片（`/api/*` 优先读内嵌数据）。静态版额外带
 `<meta name="robots" content="noindex,nofollow">`（内部面板，不进搜索引擎）。
+
+## 生产数据库 = Supabase（本地 SQLite 仅开发镜像）
+
+架构定版：生产数据放 Supabase（Postgres），本地 SQLite 只作开发镜像；面板取数双模式——
+有 Supabase 配置时直查 PostgREST 读活数据，没配置或查询失败时回退内嵌快照。
+
+接 Supabase 的步骤：
+
+1. 在 supabase.com 建项目（免费层即可），记下 Project URL 与 anon public key
+   （service_role key 只给后台写入脚本用，**绝不进面板/前端**）；
+2. 在项目 SQL Editor 里依次跑 `supabase/schema.sql`、`supabase/seed.sql`
+   （schema 末尾已开 RLS：anon 只有 select 策略，写不进任何表）；
+3. 重新导出面板并注入配置（不用改任何代码）：
+
+   ```bash
+   GEO_SUPABASE_URL=https://<ref>.supabase.co GEO_SUPABASE_ANON_KEY=<anon key> \
+     .venv/bin/python export_static.py /path/to/index.html
+   ```
+
+   导出页会写入 `window.__GEO_CONFIG__`；面板打开时优先按此配置直查
+   `/rest/v1/<table>` 拼数渲染，任一查询失败自动回退到同页内嵌的 `__GEO_DATA__` 快照。
+   本次主站上线版不带配置（项目还没建），先以快照模式上线，建好后按上面重导即切活数据。
 ```
 
 ## 数据表与种子行数

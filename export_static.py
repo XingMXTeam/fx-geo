@@ -9,6 +9,13 @@
 
 用法：
   .venv/bin/python export_static.py [输出路径]   # 默认 ./dist/geo/index.html
+
+可选注入 Supabase 活数据配置（面板取数层双模式，见 panel.html 头部脚本）：
+  GEO_SUPABASE_URL=https://<ref>.supabase.co GEO_SUPABASE_ANON_KEY=<anon key> \
+    .venv/bin/python export_static.py [输出路径]
+  或参数 --supabase-url <url> --anon-key <key>。两者都给齐时，导出页会写入
+  window.__GEO_CONFIG__，面板优先直查 Supabase PostgREST，失败自动回退内嵌快照；
+  不给（本次上线即如此）则只有快照模式。只许填 anon key，绝不许填 service_role key。
 """
 import json
 import os
@@ -54,7 +61,7 @@ window.__GEO_DATA__ = __GEO_DATA_JSON__;
 """
 
 
-def build(out_path):
+def build(out_path, supabase_url=None, anon_key=None):
     data = collect_data()
     with open(os.path.join(BASE, "panel.html"), encoding="utf-8") as f:
         html = f.read()
@@ -65,15 +72,32 @@ def build(out_path):
         '<meta charset="utf-8">\n<meta name="robots" content="noindex,nofollow">',
         1,
     )
+    head_extra = ""
+    if supabase_url and anon_key:
+        cfg = json.dumps({"supabaseUrl": supabase_url, "anonKey": anon_key}, ensure_ascii=False)
+        head_extra += f"<script>window.__GEO_CONFIG__ = {cfg};</script>\n"
     shim = SHIM.replace("__GEO_DATA_JSON__", json.dumps(data, ensure_ascii=False))
-    html = html.replace("</head>", shim + "</head>", 1)
+    html = html.replace("</head>", head_extra + shim + "</head>", 1)
 
     os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(html)
-    print(f"wrote {out_path} ({len(html)} bytes, {len(data)} api payloads embedded)")
+    mode = "supabase-config + snapshot" if (supabase_url and anon_key) else "snapshot-only"
+    print(f"wrote {out_path} ({len(html)} bytes, {len(data)} api payloads embedded, mode={mode})")
 
 
 if __name__ == "__main__":
-    out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(BASE, "dist", "geo", "index.html")
-    build(out)
+    args = sys.argv[1:]
+    url = os.environ.get("GEO_SUPABASE_URL")
+    key = os.environ.get("GEO_SUPABASE_ANON_KEY")
+    positional = []
+    i = 0
+    while i < len(args):
+        if args[i] == "--supabase-url" and i + 1 < len(args):
+            url = args[i + 1]; i += 2
+        elif args[i] == "--anon-key" and i + 1 < len(args):
+            key = args[i + 1]; i += 2
+        else:
+            positional.append(args[i]); i += 1
+    out = positional[0] if positional else os.path.join(BASE, "dist", "geo", "index.html")
+    build(out, url, key)
