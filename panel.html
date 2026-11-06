@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-bs-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>fx-geo · GEO 闭环系统</title>
-<link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="12" fill="%23206bc4"/><path d="M14 40 L26 40 L31 24 L36 48 L41 40 L50 40" stroke="white" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>'>
+<link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="12" fill="%235e6ad2"/><path d="M14 40 L26 40 L31 24 L36 48 L41 40 L50 40" stroke="white" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>'>
 <style>
 /*__TABLER_CSS__*/
 </style>
@@ -41,6 +41,107 @@
   .fx-cat { color: var(--tblr-primary, #206bc4); font-weight: 600; margin: 14px 0 4px; }
   ol.fx-prompts { margin: 0; padding-left: 22px; }
   ol.fx-prompts li { margin: 3px 0; }
+
+  /* ============ fx-geo 深色驾驶舱（Linear 风令牌）+ 玻璃分牌签名区 ============ */
+  :root {
+    --fx-bg: #07080b; --fx-panel: #0c0d11; --fx-card: #101117;
+    --fx-line: rgba(255,255,255,.075); --fx-line-soft: rgba(255,255,255,.05);
+    --fx-ink: #eef0f6; --fx-sub: #9aa1b1; --fx-mut: #6f7587;
+    --fx-acc: #6d7cff; --fx-acc2: #38bdf8;
+  }
+  html[data-bs-theme="dark"] {
+    --tblr-body-bg: var(--fx-bg);
+    --tblr-bg-surface: var(--fx-card);
+    --tblr-bg-surface-secondary: #14151d;
+    --tblr-bg-surface-tertiary: #17181f;
+    --tblr-border-color: var(--fx-line);
+    --tblr-border-color-translucent: var(--fx-line-soft);
+    --tblr-body-color: #d7dae3;
+    --tblr-primary: var(--fx-acc);
+    --tblr-link-color: #93a0ff;
+  }
+  body { background: var(--fx-bg); color: #d7dae3; -webkit-font-smoothing: antialiased; }
+  h1, h2, h3, h4, .page-title, .h1, .h2, .h3 { color: var(--fx-ink); letter-spacing: -.01em; }
+  .subheader { color: var(--fx-mut); letter-spacing: .08em; }
+  .fx-kpis .subheader { letter-spacing: 0; }
+  .text-muted { color: var(--fx-sub) !important; }
+  .page-body { position: relative; }
+  .page-body::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 430px; pointer-events: none;
+    background:
+      radial-gradient(560px 260px at 16% -60px, rgba(109,124,255,.17), transparent 70%),
+      radial-gradient(660px 300px at 84% -90px, rgba(56,189,248,.10), transparent 70%); }
+  .page-body > .container-xl { position: relative; }
+
+  /* 侧栏与顶栏 */
+  .navbar-vertical { background: #090a0e !important; border-right: 1px solid var(--fx-line-soft); box-shadow: none !important; }
+  .navbar-vertical .nav-link { color: var(--fx-sub); border-radius: 8px; margin: 1px 10px; padding: .45rem .7rem; }
+  .navbar-vertical .nav-link:hover { color: var(--fx-ink); background: rgba(255,255,255,.045); }
+  .navbar-vertical .nav-link.active { color: #fff; background: rgba(109,124,255,.15); box-shadow: inset 2px 0 0 var(--fx-acc); }
+  .fx-brand-name { color: #fff; }
+  .page-wrapper > .navbar { background: rgba(7,8,11,.78); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--fx-line-soft); }
+
+  /* 卡片与表格 */
+  .card { background: linear-gradient(180deg, rgba(255,255,255,.028), rgba(255,255,255,.008));
+    border: 1px solid var(--fx-line); border-radius: 14px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.02), 0 14px 34px -26px rgba(0,0,0,.85); }
+  .table { color: #c9cdd8; }
+  .table > :not(caption) > * > * { background: transparent !important; box-shadow: none !important;
+    border-bottom: 1px solid var(--fx-line-soft); }
+  .table thead th { color: var(--fx-mut); }
+  .table tbody tr:hover > * { background: rgba(255,255,255,.02) !important; }
+  details.fx-hyp summary { color: var(--fx-ink); }
+  details.fx-hyp th { color: var(--fx-mut); font-weight: 500; }
+
+  /* 章节标题：渐变短横代替蓝竖条 */
+  .fx-h, .fx-sub { border-left: none; padding-left: 0; color: var(--fx-ink);
+    display: flex; align-items: center; gap: .55rem; }
+  .fx-h::before, .fx-sub::before { content: ""; width: 16px; height: 2px; border-radius: 2px; flex: none;
+    background: linear-gradient(90deg, var(--fx-acc), var(--fx-acc2)); }
+  .fx-cat { color: #a5aeff; }
+
+  /* 徽章：实色改半透明着色 */
+  .badge { font-weight: 600; border-radius: 999px; padding: .3em .62em; }
+  .badge.bg-green { background: rgba(62,207,142,.14) !important; color: #4ade9e !important; }
+  .badge.bg-red { background: rgba(242,109,109,.13) !important; color: #ff8f8f !important; }
+  .badge.bg-orange { background: rgba(232,163,60,.14) !important; color: #f2c14e !important; }
+  .badge.bg-yellow { background: rgba(232,177,60,.14) !important; color: #f0c35c !important; }
+  .badge.bg-blue { background: rgba(109,124,255,.16) !important; color: #a5aeff !important; }
+  .badge.bg-secondary { background: rgba(255,255,255,.08) !important; color: #a7adbd !important; }
+  .badge.bg-blue-lt { background: rgba(56,189,248,.12) !important; color: #7dd3fc !important; }
+
+  /* Prompt 页签 */
+  .nav-pills .nav-link { color: var(--fx-sub); border-radius: 8px; }
+  .nav-pills .nav-link:hover { color: var(--fx-ink); background: rgba(255,255,255,.04); }
+  .nav-pills .nav-link.active { background: rgba(109,124,255,.18); color: #fff; }
+
+  /* 玻璃分牌（签名区）：指针高光 + 周期扫光 + 微倾斜 */
+  .fx-kpis { perspective: 1100px; }
+  .fx-glass { position: relative; overflow: hidden; border-radius: 18px; isolation: isolate;
+    background: linear-gradient(150deg, rgba(109,124,255,.17), rgba(56,189,248,.05) 42%, rgba(255,255,255,.02) 78%);
+    border: 1px solid rgba(255,255,255,.13);
+    transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+    transition: transform .35s ease; will-change: transform; }
+  .fx-glass::before { content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+    background: radial-gradient(480px circle at var(--mx, 50%) var(--my, -20%), rgba(255,255,255,.16), transparent 45%); }
+  .fx-glass::after { content: ""; position: absolute; inset: -40%; z-index: 0; pointer-events: none;
+    background: linear-gradient(115deg, transparent 42%, rgba(255,255,255,.07) 50%, transparent 58%);
+    transform: translateX(-65%); animation: fx-sheen 7s ease-in-out infinite; }
+  @keyframes fx-sheen { 0%, 55% { transform: translateX(-65%); } 85%, 100% { transform: translateX(65%); } }
+  .fx-glass .card-body { position: relative; z-index: 1; }
+  @media (prefers-reduced-motion: reduce) {
+    .fx-glass::after { animation: none; } .fx-glass { transition: none; }
+  }
+
+  /* 分数环 */
+  .fx-gauge { position: relative; width: 118px; height: 118px; margin: .35rem auto .1rem; }
+  .fx-gauge svg { display: block; transform: rotate(-90deg); }
+  .fx-ring-bg { stroke: rgba(255,255,255,.09); }
+  .fx-ring-fg { stroke: #7d8bff; stroke-linecap: round; filter: drop-shadow(0 0 5px rgba(109,124,255,.5)); }
+  .fx-gauge-num { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .fx-gauge-num .n { font-size: 2.35rem; font-weight: 800; letter-spacing: -.03em; color: #fff; line-height: 1;
+    font-variant-numeric: tabular-nums; }
+  .fx-gauge-num .u { font-size: .68rem; color: var(--fx-sub); margin-top: .18rem; }
 </style>
 </head>
 <body>
@@ -51,7 +152,7 @@
         <span class="navbar-toggler-icon"></span>
       </button>
       <div class="fx-brand">
-        <svg width="34" height="34" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="12" fill="#206bc4"/><path d="M14 40 L26 40 L31 24 L36 48 L41 40 L50 40" stroke="#fff" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <svg width="34" height="34" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="12" fill="#5e6ad2"/><path d="M14 40 L26 40 L31 24 L36 48 L41 40 L50 40" stroke="#fff" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
         <div>
           <div class="fx-brand-name">fx-geo <span class="badge bg-blue-lt align-middle">v0.1</span></div>
           <div class="fx-brand-sub">GEO 闭环系统</div>
@@ -351,21 +452,30 @@ const HROWS = [['假设', 'hypothesis'], ['主指标', 'primary_metric'], ['基�
   ['护栏', 'guardrail'], ['成功阈值', 'threshold'], ['对照组', 'control_group'], ['成本', 'cost'], ['停止条件', 'stop_condition']];
 const STATUS_ORDER = ['已接入', '未接入', '未配置', '未部署'];
 
+const BD_MAX = { robots: 18, llms: 18, schema: 16, meta: 14, content: 12, signals: 6, ai_discovery: 6, brand_entity: 10 };
 const bdCell = (bd, key) => {
   const cell = bd && bd[key];
+  if (typeof cell === 'number') return BD_MAX[key] ? `${cell}/${BD_MAX[key]}` : String(cell);
   if (!cell || typeof cell.score !== 'number') return '—';
   return typeof cell.max === 'number' ? `${cell.score}/${cell.max}` : String(cell.score);
 };
 const scoreKpi = s => {
   const a = s.audit;
   const has = !!(a && typeof a.score === 'number');
-  const score = has
-    ? `${a.score}<span class="text-muted fs-4"> / 100${a.band ? ' · ' + esc(a.band) : ''}</span>`
-    : '—';
-  return `<div class="card"><div class="card-body">
-    <div class="subheader">卫生分</div>
-    <div class="h1 mb-0 mt-1">${score}</div>
-    <div class="text-muted mt-1" title="${esc(s.domain)}">${esc(s.domain)}</div>
+  const C = 326.7;
+  const off = has ? (C * (1 - Math.max(0, Math.min(100, a.score)) / 100)).toFixed(1) : C;
+  return `<div class="card fx-glass"><div class="card-body">
+    <div class="subheader" style="text-align:center">卫生分</div>
+    <div class="fx-gauge">
+      <svg width="118" height="118" viewBox="0 0 118 118" aria-hidden="true">
+        <circle class="fx-ring-bg" cx="59" cy="59" r="52" fill="none" stroke-width="7"/>
+        <circle class="fx-ring-fg" cx="59" cy="59" r="52" fill="none" stroke-width="7"
+          stroke-dasharray="${C}" stroke-dashoffset="${off}"/>
+      </svg>
+      <div class="fx-gauge-num"><div class="n">${has ? a.score : '—'}</div><div class="u">/ 100</div></div>
+    </div>
+    ${has && a.band ? `<div class="text-muted" style="text-align:center">${esc(a.band)}</div>` : ''}
+    <div class="text-muted mt-1" style="text-align:center" title="${esc(s.domain)}">${esc(s.domain)}</div>
   </div></div>`;
 };
 const statKpi = (label, num, unit) => {
@@ -514,6 +624,28 @@ Promise.all([
   load('/api/sites/2').catch(() => null),
   load('/api/sites/1').catch(() => null)
 ]).then(([lab, main]) => renderBaselines(lab, main));
+</script>
+<script>
+/* 玻璃分牌：指针追随高光 + 微倾斜（纯增强；减动效偏好时不启用） */
+(function () {
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  var row = document.getElementById('kpi-row');
+  if (!row) return;
+  row.addEventListener('pointermove', function (e) {
+    var card = e.target && e.target.closest ? e.target.closest('.fx-glass') : null;
+    if (!card) return;
+    var r = card.getBoundingClientRect();
+    var x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+    card.style.setProperty('--mx', (x * 100) + '%');
+    card.style.setProperty('--my', (y * 100) + '%');
+    card.style.setProperty('--ry', ((x - .5) * 5).toFixed(2) + 'deg');
+    card.style.setProperty('--rx', ((.5 - y) * 5).toFixed(2) + 'deg');
+  });
+  row.addEventListener('pointerout', function (e) {
+    var card = e.target && e.target.closest ? e.target.closest('.fx-glass') : null;
+    if (card) { card.style.setProperty('--rx', '0deg'); card.style.setProperty('--ry', '0deg'); }
+  });
+})();
 </script>
 </body>
 </html>
