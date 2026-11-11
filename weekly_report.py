@@ -17,6 +17,7 @@ from datetime import datetime, timedelta, timezone
 import db
 import gates
 from migrations_p1 import ensure_p1_schema
+from rubric import parse_score_version
 
 CST = timezone(timedelta(hours=8))
 GEMINI_DIR = os.path.expanduser(
@@ -54,32 +55,75 @@ def audit_run_date(audit: dict) -> str:
     return dt.astimezone(CST).date().isoformat()
 
 
-def latest_audit_facts(sites: list[dict], audits: dict[str, dict]) -> tuple[str, list[tuple[str, int]]]:
-    """只从 audits 最新行组装审计日期与分数，禁止从状态文本摘分数。"""
+def load_audits_by_version(conn: sqlite3.Connection, sites: list[dict]) -> dict[str, dict[int, dict]]:
+    """domain -> {score_version: latest row}. Versions are never folded together."""
+    grouped: dict[str, dict[int, dict]] = {}
+    for site in sites:
+        by_version: dict[int, dict] = {}
+        rows = conn.execute(
+            "SELECT * FROM audits WHERE site_id = ? ORDER BY id", (site["id"],)
+        ).fetchall()
+        for row in rows:
+            item = dict(row)
+            by_version[parse_score_version(item.get("score_version"))] = item
+        grouped[site["domain"]] = by_version
+    return grouped
+
+
+def _version_facts(sites: list[dict], grouped: dict[str, dict[int, dict]], version: int) -> tuple[str, list[tuple[str, int]]]:
+    """One rubric's latest rows. Does not read the other version."""
     facts: list[tuple[str, int]] = []
     dates: list[str] = []
     for site in sites:
-        audit = audits.get(site["domain"])
+        audit = grouped.get(site["domain"], {}).get(version)
         if audit and audit.get("score") is not None:
             facts.append((audit_label(site), int(audit["score"])))
             dates.append(audit_run_date(audit))
     return (max(dates) if dates else "日期未记录", facts)
 
 
-def audit_detail_text(sites: list[dict], audits: dict[str, dict]) -> str:
-    date, facts = latest_audit_facts(sites, audits)
-    if not facts:
-        return "暂无审计记录"
-    scores = "、".join(f"{label} {score} 分" for label, score in facts)
-    return f"{date} 已实跑双站：{scores}（卫生分，不预测引用）"
+def audit_asof_text(sites: list[dict], grouped: dict[str, dict[int, dict]]) -> str:
+    bits = []
+    for version in (1, 2):
+        date, facts = _version_facts(sites, grouped, version)
+        if facts:
+            bits.append(f"score_version=v{version} {date}")
+        else:
+            bits.append(f"score_version=v{version} 尚无采样")
+    return "；".join(bits)
 
 
-def audit_score_text(sites: list[dict], audits: dict[str, dict]) -> str:
-    date, facts = latest_audit_facts(sites, audits)
-    if not facts:
+def audit_detail_text(sites: list[dict], grouped: dict[str, dict[int, dict]]) -> str:
+    """v1 and v2 stated separately. No cross-version delta."""
+    parts = []
+    any_score = False
+    for version in (1, 2):
+        date, facts = _version_facts(sites, grouped, version)
+        if not facts:
+            parts.append(f"score_version=v{version}：尚无采样")
+            continue
+        any_score = True
+        scores = "、".join(f"{label} {score} 分" for label, score in facts)
+        parts.append(f"score_version=v{version}：{date} {scores}（卫生分，不预测引用）")
+    if not any_score:
         return "暂无审计记录"
-    scores = " / ".join(f"{label} {score}" for label, score in facts)
-    return f"{date} 实跑：{scores}（卫生分）"
+    return "；".join(parts)
+
+
+def audit_score_text(sites: list[dict], grouped: dict[str, dict[int, dict]]) -> str:
+    parts = []
+    any_score = False
+    for version in (1, 2):
+        date, facts = _version_facts(sites, grouped, version)
+        if not facts:
+            parts.append(f"score_version=v{version} 尚无采样")
+            continue
+        any_score = True
+        scores = " / ".join(f"{label} {score}" for label, score in facts)
+        parts.append(f"score_version=v{version} {date} {scores}")
+    if not any_score:
+        return "暂无审计记录"
+    return "；".join(parts) + "（卫生分）"
 
 
 def gemini_status() -> dict:
@@ -104,13 +148,7 @@ def build_report(conn: sqlite3.Connection, week_label: str) -> str:
     ev = gates.load_gsc_evidence()
     gem = gemini_status()
     sites = [dict(r) for r in conn.execute("SELECT * FROM sites ORDER BY id")]
-    audits = {}
-    for s in sites:
-        row = conn.execute(
-            "SELECT * FROM audits WHERE site_id = ? ORDER BY id DESC LIMIT 1",
-            (s["id"],)).fetchone()
-        if row:
-            audits[s["domain"]] = dict(row)
+    audits = load_audits_by_version(conn, sites)
     sources = [dict(r) for r in conn.execute("SELECT * FROM source_status ORDER BY id")]
     findings = conn.execute(
         "SELECT layer, COUNT(*) AS n FROM findings GROUP BY layer ORDER BY layer").fetchall()
@@ -127,8 +165,7 @@ def build_report(conn: sqlite3.Connection, week_label: str) -> str:
     add(f"# GEO 周报 · {week_label}（第一期）")
     add("")
     add(f"- 生成时间：{gates.now_iso()}（weekly_report.py 自动生成，数据源：geo.db + GSC pull + 基线目录）")
-    audit_date, _ = latest_audit_facts(sites, audits)
-    add(f"- 数据截至：审计 {audit_date} 实跑；GSC 窗口 {ev.get('window', '不可用')}；采样见 §2")
+    add(f"- 数据截至：审计 {audit_asof_text(sites, audits)}；GSC 窗口 {ev.get('window', '不可用')}；采样见 §2")
     add("")
     add("## 0. 一句话结论")
     add("")
@@ -161,8 +198,7 @@ def build_report(conn: sqlite3.Connection, week_label: str) -> str:
     add("| 层 | 状态 | 证据 |")
     add("|---|---|---|")
     l1n = next((r["n"] for r in findings if r["layer"] == "L1"), 0)
-    audit_txt = "、".join(f"{d} {a['score']} 分" for d, a in audits.items())
-    add(f"| L1 可达 | 已测，有问题待修 | geo-optimizer 审计（{audit_txt}，卫生分）；findings 中 L1 共 {l1n} 条 |")
+    add(f"| L1 可达 | 已测，有问题待修 | geo-optimizer 审计（{audit_score_text(sites, audits)}）；findings 中 L1 共 {l1n} 条 |")
     add("| L2 被抓取 | 无数据（标缺） | 原始日志未接入，bot 到访无从计数——不拿 robots 放行冒充来访 |")
     sm_err = ev.get("sitemaps_errors") if ev.get("available") else None
     if sm_err and all(str(e) == "0" for e in sm_err):
@@ -254,6 +290,7 @@ def build_report(conn: sqlite3.Connection, week_label: str) -> str:
     add("## 8. 口径与诚实声明")
     add("")
     add("- 审计分是卫生分（CI 门禁），不预测引用、不进任何假设卡指标栏（设计 §1.4）。")
+    add("- 卫生分不是 AI 引用率、提及率或发现率。score_version=v1 与 score_version=v2 各是一套 100 分，不放在同一条趋势里，也不做差额。")
     add("- 提及/引用口径为本系统自家定义（设计 §5），与 Profound 等工具不可比；API 口径与网页口径分开标注。")
     add("- 单次/2 次采样不进结论；本期所有采样数字均注明口径与日期。")
     add("- 本周报由 weekly_report.py 从 geo.db 与 pull JSON 自动生成；闸门结论来自 gates.py 确定性检查并已写入 gate_checks。")

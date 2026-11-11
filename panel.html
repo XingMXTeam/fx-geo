@@ -142,6 +142,15 @@
   .fx-gauge-num .n { font-size: 2.35rem; font-weight: 800; letter-spacing: -.03em; color: #fff; line-height: 1;
     font-variant-numeric: tabular-nums; }
   .fx-gauge-num .u { font-size: .68rem; color: var(--fx-sub); margin-top: .18rem; }
+  .fx-note { color: var(--fx-sub); font-size: .875rem; margin: 0 0 .75rem; max-width: 72rem; }
+  .fx-trend-h { display: flex; align-items: center; gap: .5rem; font-weight: 700; color: var(--fx-ink); margin-bottom: .35rem; }
+  .fx-spark { display: grid; grid-template-columns: minmax(12rem, 1.4fr) 180px minmax(8rem, 1fr); gap: .75rem; align-items: center; padding: .4rem 0; border-top: 1px solid var(--fx-line-soft); }
+  @media (max-width: 720px) {
+    .fx-spark { grid-template-columns: 1fr; gap: .25rem; }
+  }
+  .fx-spark-score { color: var(--fx-sub); font-variant-numeric: tabular-nums; }
+  .fx-empty-trend { margin: .2rem 0 0; color: var(--fx-sub); }
+  .fx-version { margin-top: .35rem; }
 </style>
 </head>
 <body>
@@ -154,7 +163,7 @@
       <div class="fx-brand">
         <svg width="34" height="34" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="12" fill="#5e6ad2"/><path d="M14 40 L26 40 L31 24 L36 48 L41 40 L50 40" stroke="#fff" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
         <div>
-          <div class="fx-brand-name">fx-geo <span class="badge bg-blue-lt align-middle">v0.1</span></div>
+          <div class="fx-brand-name">fx-geo <span class="badge bg-blue-lt align-middle">v0.1</span> <span class="badge bg-blue align-middle">score_version=v2</span></div>
           <div class="fx-brand-sub">GEO 闭环系统</div>
         </div>
       </div>
@@ -194,7 +203,15 @@
           <h3 class="fx-sub" id="sites-h">站点</h3>
           <div id="sites"></div>
           <h3 class="fx-sub" id="scores-h">卫生分</h3>
+          <p class="fx-note" id="hygiene-note">卫生分不是 AI 引用率、提及率或发现率。v1 与 v2 各看各的 100 分，不画在同一条趋势上。</p>
+          <div id="rubric-v2"></div>
+          <div id="trend-v2"></div>
+          <h3 class="fx-sub" id="v2-breakdown-h">v2 实测分解</h3>
           <div id="scores"></div>
+          <h3 class="fx-sub" id="history-v1-h">历史卫生分</h3>
+          <p class="fx-note">2026-11-02 geo-optimizer 4.18.3 实跑，score_version=v1。这些分数不进入 v2 趋势，也不换算成 v2。</p>
+          <div id="trend-v1"></div>
+          <div id="history-v1"></div>
         </section>
 
         <section id="sources" class="fx-section" data-entity="source_status">
@@ -237,6 +254,129 @@
     </div>
   </div>
 </div>
+<script type="application/json" id="fx-score-rubric">
+{
+  "default_score_version": 2,
+  "upstream": "Auriti-Labs/geo-optimizer-skill v4.19.0",
+  "hygiene_note": "卫生分不是 AI 引用率、提及率或发现率。",
+  "v1": {
+    "order": [
+      "robots",
+      "llms",
+      "schema",
+      "meta",
+      "content",
+      "signals",
+      "ai_discovery",
+      "brand_entity"
+    ],
+    "max": {
+      "robots": 18,
+      "llms": 18,
+      "schema": 16,
+      "meta": 14,
+      "content": 12,
+      "brand_entity": 10,
+      "signals": 6,
+      "ai_discovery": 6
+    }
+  },
+  "v2": {
+    "order": [
+      "google_ai",
+      "robots",
+      "schema",
+      "content",
+      "brand_entity",
+      "meta",
+      "llms",
+      "signals",
+      "ai_discovery"
+    ],
+    "max": {
+      "google_ai": 20,
+      "robots": 14,
+      "schema": 14,
+      "content": 14,
+      "brand_entity": 12,
+      "meta": 11,
+      "llms": 6,
+      "signals": 6,
+      "ai_discovery": 3
+    },
+    "signals": {
+      "google_ai": "G-INDEX 5 · G-SNIPPET 5 · G-CANONICAL 3 · G-DATES 2 · G-BYLINE 2 · G-LINKS 1 · G-VIEWPORT 1 · G-SITEMAP 1 · G-GENAI-CONTROL 0",
+      "robots": "found 3 · citation bots allowed 11",
+      "schema": "any valid 2 · richness 2 · FAQ 2 · Article 2 · Organization 3 · WebSite 1 · sameAs 0 · visible name match 2",
+      "content": "H1 2 · numbers 1 · links 1 · word count 1 · heading hierarchy 3 · lists/tables 2 · front-loading 2 · image alt 2",
+      "brand_entity": "coherence 3 · KG readiness 4 · about/contact 3 · geo identity 1 · topic authority 1",
+      "meta": "title 5 · description 2 · canonical 0 · Open Graph 4",
+      "llms": "found 3 · h1 0 · blockquote 0 · sections 1 · links 1 · depth 0 · depth_high 0 · llms-full 1",
+      "signals": "lang 3 · RSS 1 · freshness 2",
+      "ai_discovery": "ai.txt 1 · summary.json 1 · faq.json 0 · service.json 0 · markdown negotiation 1"
+    }
+  }
+}
+</script>
+<script>
+(function () {
+  var rubric = JSON.parse(document.getElementById('fx-score-rubric').textContent);
+  function jparse(v) {
+    if (typeof v === 'string') { try { return JSON.parse(v); } catch (e) { return v; } }
+    return v;
+  }
+  function parseScoreVersion(v) {
+    return v === 2 || v === '2' || v === 'v2' ? 2 : 1;
+  }
+  function maxima(version) {
+    return parseScoreVersion(version) === 2 ? rubric.v2.max : rubric.v1.max;
+  }
+  function order(version) {
+    return parseScoreVersion(version) === 2 ? rubric.v2.order : rubric.v1.order;
+  }
+  function normalizeBreakdown(raw, version) {
+    var maxes = maxima(version);
+    var out = {};
+    var src = raw && typeof raw === 'object' ? raw : {};
+    Object.keys(src).forEach(function (k) {
+      var cell = src[k];
+      if (k === 'negative_penalty') { out[k] = cell; return; }
+      if (typeof cell === 'number') {
+        if (Object.prototype.hasOwnProperty.call(maxes, k)) out[k] = { score: cell, max: maxes[k] };
+        return;
+      }
+      if (cell && typeof cell === 'object' && typeof cell.score === 'number') {
+        var max = typeof cell.max === 'number' ? cell.max : maxes[k];
+        out[k] = typeof max === 'number' ? { score: cell.score, max: max } : { score: cell.score };
+      }
+    });
+    return out;
+  }
+  function normalizeAudit(a) {
+    var copy = Object.assign({}, a);
+    var version = parseScoreVersion(copy.score_version);
+    copy.score_version = version;
+    var raw = copy.breakdown;
+    if ((raw == null || raw === '') && copy.breakdown_json != null) raw = jparse(copy.breakdown_json);
+    if (typeof raw === 'string') raw = jparse(raw);
+    copy.breakdown = normalizeBreakdown(raw || {}, version);
+    if (copy.priorities == null && copy.priorities_json != null) copy.priorities = jparse(copy.priorities_json) || [];
+    if (copy.failures == null && copy.failures_json != null) copy.failures = jparse(copy.failures_json) || [];
+    delete copy.breakdown_json;
+    delete copy.priorities_json;
+    delete copy.failures_json;
+    return copy;
+  }
+  window.fxScore = {
+    rubric: rubric,
+    parseScoreVersion: parseScoreVersion,
+    maxima: maxima,
+    order: order,
+    normalizeBreakdown: normalizeBreakdown,
+    normalizeAudit: normalizeAudit
+  };
+})();
+</script>
 <script>
 /* 取数双模式（本脚本先于主脚本运行）：
    1) window.__GEO_CONFIG__ = { supabaseUrl, anonKey } 存在时：直查 Supabase PostgREST，
@@ -279,23 +419,24 @@
     return v;
   }
   function sitePayload(D, site) {
-    var audit = null;
-    D.audits.forEach(function (a) { if (a.site_id === site.id) audit = a; }); // id 升序，最后一个即最新
-    if (audit) {
-      audit = Object.assign({}, audit);
-      audit.breakdown = jparse(audit.breakdown_json) || {};
-      // 归一化：复测原始 JSON 的 breakdown 是扁平 {key: score}，种子行是 {key:{score,max}}，统一成后者
-      var BD_MAX = {robots: 18, llms: 18, schema: 16, meta: 14, content: 12, signals: 6, ai_discovery: 6, brand_entity: 10};
-      Object.keys(audit.breakdown).forEach(function (k) {
-        if (typeof audit.breakdown[k] === 'number' && BD_MAX[k]) audit.breakdown[k] = {score: audit.breakdown[k], max: BD_MAX[k]};
-      });
-      audit.priorities = jparse(audit.priorities_json) || [];
-      audit.failures = jparse(audit.failures_json) || [];
-      delete audit.breakdown_json; delete audit.priorities_json; delete audit.failures_json;
-    }
+    var audits = D.audits.filter(function (a) { return a.site_id === site.id; }).map(function (a) {
+      return window.fxScore.normalizeAudit(a);
+    });
+    audits.sort(function (a, b) {
+      var ar = String(a.run_at || ''), br = String(b.run_at || '');
+      if (ar !== br) return ar < br ? -1 : 1;
+      return (a.id || 0) - (b.id || 0);
+    });
+    var v2 = null, v1 = null;
+    audits.forEach(function (a) {
+      if (a.score_version === 2) v2 = a;
+      else v1 = a;
+    });
     var nb = D.baselines.filter(function (b) { return b.site_id === site.id; }).length;
     var out = Object.assign({}, site);
-    out.audit = audit;
+    out.audit = v2;
+    out.audit_v1 = v1;
+    out.audits = audits;
     out.baseline_count = nb;
     out.baseline_status = nb ? '有快照' : '尚无采样';
     out.findings_count = D.findings.filter(function (f) { return f.site_id === site.id; }).length;
@@ -436,9 +577,6 @@ document.querySelectorAll('#sidebar-menu .nav-link').forEach(a =>
   }
 })();
 
-const BD_FIELDS = ['robots', 'llms', 'schema', 'meta', 'content', 'signals', 'ai_discovery', 'brand_entity'];
-const SCORE_HEADERS = [['domain', 'domain'], ['score', 'score'], ['band', 'band']]
-  .concat(BD_FIELDS.map(k => [k, k]), [['negative_penalty', 'negative_penalty']]);
 const SITE_HEADERS = [['domain', 'domain'], ['name', 'name'], ['role', 'role'],
   ['baseline_status', 'baseline_status'], ['baseline_count', 'baseline_count'],
   ['findings_count', 'findings_count'], ['north_star', 'north_star']];
@@ -449,22 +587,42 @@ const RULE_HEADERS = [['name', 'name'], ['statement', 'statement'], ['evidence_l
 const BL_HEADERS = [['snapshot_date', 'snapshot_date'], ['engine', 'engine'], ['metric', 'metric'],
   ['subject', 'subject'], ['value', 'value'], ['unit', 'unit'], ['caliber', 'caliber'], ['source', 'source']];
 const HROWS = [['假设', 'hypothesis'], ['主指标', 'primary_metric'], ['基线值', 'baseline_value'], ['目标', 'target'],
-  ['护栏', 'guardrail'], ['成功阈值', 'threshold'], ['对照组', 'control_group'], ['成本', 'cost'], ['停止条件', 'stop_condition']];
+  ['护栏', 'guardrail'], ['成功阈值', 'threshold'], ['对照组', 'control_group'], ['成本', 'cost'], ['停止条件', 'stop_condition'],
+  ['卫生复核', 'hygiene_note']];
 const STATUS_ORDER = ['已接入', '未接入', '未配置', '未部署'];
 
-const BD_MAX = { robots: 18, llms: 18, schema: 16, meta: 14, content: 12, signals: 6, ai_discovery: 6, brand_entity: 10 };
+const auditDay = raw => {
+  if (!raw) return '—';
+  const dt = new Date(raw);
+  if (Number.isNaN(dt.getTime())) return String(raw).slice(0, 10);
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(dt);
+};
 const bdCell = (bd, key) => {
   const cell = bd && bd[key];
-  if (typeof cell === 'number') return BD_MAX[key] ? `${cell}/${BD_MAX[key]}` : String(cell);
+  if (typeof cell === 'number') return String(cell);
   if (!cell || typeof cell.score !== 'number') return '—';
   return typeof cell.max === 'number' ? `${cell.score}/${cell.max}` : String(cell.score);
 };
+const auditsOf = s => {
+  const rows = Array.isArray(s.audits) && s.audits.length
+    ? s.audits
+    : [s.audit, s.audit_v1].filter(Boolean);
+  return rows.map(a => window.fxScore.normalizeAudit(a));
+};
+const v2AuditOf = s => {
+  const direct = s.audit && window.fxScore.parseScoreVersion(s.audit.score_version) === 2 ? s.audit : null;
+  if (direct && typeof direct.score === 'number') return window.fxScore.normalizeAudit(direct);
+  const rows = auditsOf(s).filter(a => a.score_version === 2 && typeof a.score === 'number');
+  return rows.length ? rows[rows.length - 1] : null;
+};
 const scoreKpi = s => {
-  const a = s.audit;
-  const has = !!(a && typeof a.score === 'number');
+  const a = v2AuditOf(s);
+  const has = !!a;
   const C = 326.7;
   const off = has ? (C * (1 - Math.max(0, Math.min(100, a.score)) / 100)).toFixed(1) : C;
-  return `<div class="card fx-glass"><div class="card-body">
+  return `<div class="card fx-glass" data-score-version="2"><div class="card-body">
     <div class="subheader" style="text-align:center">卫生分</div>
     <div class="fx-gauge">
       <svg width="118" height="118" viewBox="0 0 118 118" aria-hidden="true">
@@ -474,7 +632,8 @@ const scoreKpi = s => {
       </svg>
       <div class="fx-gauge-num"><div class="n">${has ? a.score : '—'}</div><div class="u">/ 100</div></div>
     </div>
-    ${has && a.band ? `<div class="text-muted" style="text-align:center">${esc(a.band)}</div>` : ''}
+    <div style="text-align:center"><span class="badge bg-blue">score_version=v2</span></div>
+    <div class="text-muted mt-1" style="text-align:center">${has && a.band ? esc(a.band) : '尚无 v2 采样'}</div>
     <div class="text-muted mt-1" style="text-align:center" title="${esc(s.domain)}">${esc(s.domain)}</div>
   </div></div>`;
 };
@@ -492,13 +651,92 @@ const siteRow = s => `<tr>
   <td>${s.baseline_status ? stBadge(s.baseline_status) : '—'}</td>
   <td>${numCell(s.baseline_count)}</td><td>${numCell(s.findings_count)}</td>
   <td class="fx-wrap">${textCell(s.north_star)}</td></tr>`;
-const scoreRow = s => {
-  const a = s.audit || {};
+const v2Headers = () => [['domain', 'domain'], ['score_version', 'score_version'], ['score', 'score'], ['band', 'band']]
+  .concat(window.fxScore.order(2).map(k => [k, k]), [['negative_penalty', 'negative_penalty']]);
+const v1Headers = () => [['domain', 'domain'], ['score_version', 'score_version'], ['run_at', 'run_at'], ['score', 'score'], ['band', 'band']]
+  .concat(window.fxScore.order(1).map(k => [k, k]), [['google_ai', 'google_ai'], ['negative_penalty', 'negative_penalty']]);
+const v2ScoreRow = s => {
+  const a = v2AuditOf(s);
+  const maxes = window.fxScore.maxima(2);
+  const bd = a ? a.breakdown || {} : {};
+  const cells = window.fxScore.order(2).map(k => `<td>${a ? bdCell(bd, k) : `—/${maxes[k]}`}</td>`).join('');
+  const pen = a && typeof bd.negative_penalty === 'number' ? String(bd.negative_penalty) : '—';
+  const score = a ? String(a.score) : '—';
+  const band = a && a.band ? textCell(a.band) : '尚无 v2 采样';
+  return `<tr data-score-version="2"><td>${textCell(s.domain)}</td><td>v2</td><td>${score}</td><td>${band}</td>${cells}<td>${pen}</td></tr>`;
+};
+const v1ScoreRow = s => auditsOf(s).filter(a => a.score_version === 1).map(a => {
   const bd = a.breakdown || {};
-  const score = typeof a.score === 'number' ? String(a.score) : '—';
-  const cells = BD_FIELDS.map(k => `<td>${bdCell(bd, k)}</td>`).join('');
+  const cells = window.fxScore.order(1).map(k => `<td>${bdCell(bd, k)}</td>`).join('');
   const pen = typeof bd.negative_penalty === 'number' ? String(bd.negative_penalty) : '—';
-  return `<tr><td>${textCell(s.domain)}</td><td>${score}</td><td>${textCell(a.band)}</td>${cells}<td>${pen}</td></tr>`;
+  const when = auditDay(a.run_at);
+  const score = typeof a.score === 'number' ? String(a.score) : '—';
+  return `<tr data-score-version="1"><td>${textCell(s.domain)}</td><td>v1</td><td>${esc(when)}</td><td>${score}</td><td>${textCell(a.band)}</td>${cells}<td>v1 无此分类</td><td>${pen}</td></tr>`;
+}).join('');
+const sparkline = points => {
+  if (!points.length) return '';
+  const w = 180, h = 36, pad = 4;
+  const coords = points.map((p, i) => {
+    const x = points.length === 1 ? w / 2 : pad + (i * (w - pad * 2)) / (points.length - 1);
+    const y = pad + (1 - Math.max(0, Math.min(100, p.score)) / 100) * (h - pad * 2);
+    return [x, y];
+  });
+  const line = coords.length >= 2
+    ? `<polyline fill="none" stroke="#7d8bff" stroke-width="2" points="${coords.map(c => `${c[0].toFixed(1)},${c[1].toFixed(1)}`).join(' ')}"/>`
+    : '';
+  const dots = coords.map(c => `<circle cx="${c[0].toFixed(1)}" cy="${c[1].toFixed(1)}" r="3.5" fill="#7d8bff"/>`).join('');
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true">${line}${dots}</svg>`;
+};
+const pointsFor = (s, version) => auditsOf(s)
+  .filter(a => a.score_version === version && typeof a.score === 'number')
+  .map(a => ({ score: a.score, run_at: a.run_at || '' }))
+  .sort((a, b) => String(a.run_at).localeCompare(String(b.run_at)));
+const trendCard = (version, sites) => {
+  const rows = sites.map(s => ({ domain: s.domain, points: pointsFor(s, version) }));
+  const count = rows.reduce((n, r) => n + r.points.length, 0);
+  const title = version === 2 ? 'v2 趋势' : 'v1 历史';
+  const empty = version === 2
+    ? '尚无 score_version=v2 采样点。v1 历史不画在这张图上。'
+    : '尚无 score_version=v1 采样点。';
+  const body = count === 0
+    ? `<p class="fx-empty-trend">${empty}</p>`
+    : rows.map(r => {
+        const text = r.points.length
+          ? r.points.map(p => `${p.score}（${auditDay(p.run_at)}）`).join('，')
+          : '尚无采样';
+        return `<div class="fx-spark" data-score-version="${version}" data-domain="${esc(r.domain)}" data-points="${r.points.length}">
+          <div>${esc(r.domain)}</div>${sparkline(r.points)}<div class="fx-spark-score">${esc(text)}</div></div>`;
+      }).join('');
+  return `<div class="card fx-trend mb-3" data-score-version="${version}" data-series-points="${count}"><div class="card-body">
+    <div class="fx-trend-h"><span class="badge bg-blue">score_version=v${version}</span><span>${title}</span></div>
+    ${body}
+  </div></div>`;
+};
+const versionStamp = sites => {
+  const buckets = { 1: [], 2: [] };
+  sites.forEach(s => auditsOf(s).forEach(a => {
+    if (a.run_at) buckets[a.score_version].push(auditDay(a.run_at));
+  }));
+  const v2 = buckets[2].sort().pop();
+  const v1 = buckets[1].sort().pop();
+  return [
+    v2 ? `score_version=v2 审计 ${v2}` : 'score_version=v2 尚无采样',
+    v1 ? `score_version=v1 审计 ${v1}` : 'score_version=v1 尚无采样'
+  ].join(' · ');
+};
+const renderRubric = () => {
+  const r = window.fxScore.rubric;
+  const rows = r.v2.order.map(k =>
+    `<tr><td>${esc(k)}</td><td>${r.v2.max[k]}</td><td class="fx-wrap">${esc(r.v2.signals[k])}</td></tr>`).join('');
+  const total = r.v2.order.reduce((n, k) => n + r.v2.max[k], 0);
+  $('rubric-v2').innerHTML = `<div class="card mb-3" data-score-version="2"><div class="card-body">
+    <div class="fx-trend-h"><span class="badge bg-blue">score_version=v2</span><span>九类权重 · ${esc(r.upstream)}</span></div>
+    <p class="fx-note">${esc(r.hygiene_note)} 下面是权重，不是实测分。v1 历史分不换算到这套权重上。</p>
+    <div class="table-responsive"><table class="table table-sm card-table" aria-labelledby="scores-h">
+      <thead><tr><th scope="col">category</th><th scope="col">max</th><th scope="col">v2 signals</th></tr></thead>
+      <tbody>${rows}<tr><td>total</td><td>${total}</td><td class="fx-wrap">G-SD-VISIBLE 的 2 分在 schema 的 visible name match，不进 google_ai。robots 的 partial 不与 citation bots allowed 叠加。</td></tr></tbody>
+    </table></div>
+  </div></div>`;
 };
 const sourceRow = x => `<tr data-source="${esc(x.source || '')}" data-status="${esc(x.status || '')}" data-detail="${esc(x.detail || '')}" data-next-step="${esc(x.next_step || '')}">
   <td>${textCell(x.source)}</td><td>${textCell(x.label)}</td><td>${stBadge(x.status)}</td><td>${textCell(x.updated_at)}</td></tr>`;
@@ -538,15 +776,20 @@ const renderOverview = o => {
     t.setAttribute('datetime', String(o.as_of));
     asof.hidden = false;
   } else asof.hidden = true;
-  const runs = sites.map(s => s.audit && s.audit.run_at).filter(Boolean).sort();
-  $('last-updated').textContent = runs.length ? '审计 ' + String(runs[runs.length - 1]).slice(0, 10) : '';
+  $('last-updated').textContent = versionStamp(sites);
   $('kpi-row').innerHTML = sites.map(scoreKpi).join('')
     + statKpi('findings', counts && typeof counts.findings === 'number' ? counts.findings : '—', '条')
     + statKpi('draft', counts && typeof counts.hypotheses_draft === 'number' ? counts.hypotheses_draft : '—', '张');
   $('sites').innerHTML = tableHtml('sites-h', SITE_HEADERS,
     sites.length ? sites.map(siteRow).join('') : emptyRow(SITE_HEADERS.length, '无记录'));
-  $('scores').innerHTML = tableHtml('scores-h', SCORE_HEADERS,
-    sites.length ? sites.map(scoreRow).join('') : emptyRow(SCORE_HEADERS.length, '无记录'));
+  renderRubric();
+  $('trend-v2').innerHTML = trendCard(2, sites);
+  $('scores').innerHTML = tableHtml('v2-breakdown-h', v2Headers(),
+    sites.length ? sites.map(v2ScoreRow).join('') : emptyRow(v2Headers().length, '无记录'));
+  $('trend-v1').innerHTML = trendCard(1, sites);
+  const v1body = sites.map(v1ScoreRow).join('');
+  $('history-v1').innerHTML = tableHtml('history-v1-h', v1Headers(),
+    v1body ? v1body : emptyRow(v1Headers().length, '无记录'));
   renderSourceCounts(sources);
   $('sources-table').innerHTML = tableHtml('sources-h', SOURCE_HEADERS, sourceBody(sources));
   $('funnel-table').innerHTML = tableHtml('funnel-h', FUNNEL_HEADERS,
