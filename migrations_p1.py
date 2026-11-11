@@ -65,6 +65,7 @@ def ensure_p1_schema(conn: sqlite3.Connection) -> list[str]:
         "SELECT name FROM sqlite_master WHERE type='table'")}
     for t in sorted(after - before):
         done.append(f"table:{t}")
+    done.extend(db.ensure_audit_score_version(conn))
     conn.commit()
     return done
 

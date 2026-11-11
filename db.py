@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS audits (
     site_id INTEGER NOT NULL REFERENCES sites(id),
     run_at TEXT,
     score INTEGER,
+    score_version INTEGER NOT NULL DEFAULT 1,
     band TEXT,
     breakdown_json TEXT,
     priorities_json TEXT,
@@ -102,9 +103,21 @@ def connect():
     return conn
 
 
+def ensure_audit_score_version(conn: sqlite3.Connection) -> list[str]:
+    """Add score_version to an existing audits table. Legacy rows default to v1."""
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(audits)")}
+    if not cols or "score_version" in cols:
+        return []
+    conn.execute(
+        "ALTER TABLE audits ADD COLUMN score_version INTEGER NOT NULL DEFAULT 1"
+    )
+    return ["audits.+score_version"]
+
+
 def init_db():
     conn = connect()
     conn.executescript(SCHEMA)
+    ensure_audit_score_version(conn)
     conn.commit()
     conn.close()
 

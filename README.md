@@ -80,7 +80,7 @@ fetch 垫片（`/api/*` 优先读内嵌数据）。静态版额外带
 
 ## 数据表与种子行数
 
-sites 2 · prompts 50（两站各 25，冻结 v1）· audits 2（主站 62 / Lab 65，卫生分）
+sites 2 · prompts 50（两站各 25，冻结 v1）· audits 2（主站 62 / Lab 65，score_version=v1 卫生分；v2 序列尚无采样）
 · baseline_snapshots 7（仅 CrossAgent 2026-10-29 单次快照；主站为空 = 尚无采样）
 · findings 10 · hypotheses 4（全 draft）· source_status 7（1 已接入 / 6 未接入或未配置）
 · rules 5
@@ -104,5 +104,7 @@ sites 2 · prompts 50（两站各 25，冻结 v1）· audits 2（主站 62 / Lab
 
 ## 口径红线
 
-- 审计分是**卫生分，不预测引用**（工具作者预注册校准研究为 null），不进假设卡指标栏。
+- 审计分是**卫生分，不预测引用**（工具作者预注册校准研究为 null），不进假设卡指标栏。卫生分也不是 AI 引用率、提及率或发现率。
 - 没有采样基线的站就写「尚无采样」；没有 GSC 就写「未接入」。不许用估算填空。
+- 现行权重是 geo-optimizer 4.19 rubric v2（`DEFAULT_SCORE_VERSION = 2`）：google_ai 20、robots 14、schema 14、content 14、brand_entity 12、meta 11、llms 6、signals 6、ai_discovery 3。新采样记 `score_version=2`。
+- 2026-11-02 的双站 62 / 65 是 geo-optimizer 4.18.3 的 rubric v1（`score_version=1`，满分仍是 18/18/16/14/12/6/6/10）。它们留在 v1 历史里，不换算成 v2，也不和 v2 画在同一条趋势上。

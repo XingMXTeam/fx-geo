@@ -24,7 +24,11 @@ def status():
             "status": "ready" if all(checks.values()) else "partial",
             "paths": PATHS, "paths_exist": checks,
             "command_template": "run_geo_local.py --lang en audit --url <site> --format json",
-            "note": "审计分是卫生分，不预测引用；结果写入 audits 表"}
+            "new_sample_command": "geo-optimizer 4.19: geo audit --url <site> --format json",
+            "score_version": 2,
+            "note": "新采样用 geo-optimizer 4.19 默认 rubric v2（DEFAULT_SCORE_VERSION=2），"
+                    "以 score_version=2 另存。PATHS 里的本地 runner 若仍是 4.18.3，它的输出只能记 v1。"
+                    "卫生分不预测引用，也不是 AI 引用率、提及率或发现率。"}
 
 
 if __name__ == "__main__":

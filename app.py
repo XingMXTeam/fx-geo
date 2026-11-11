@@ -10,6 +10,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from db import connect, init_db
+from rubric import current_v2, normalize_breakdown, parse_score_version, split_series
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 app = FastAPI(title="GEO 闭环系统 MVP")
@@ -37,17 +38,30 @@ def one(sql, args=()):
     return r[0] if r else None
 
 
+def present_audit(row):
+    """One stored audit. score_version stays on the row; stored maxima are kept."""
+    audit = dict(row)
+    version = parse_score_version(audit.get("score_version"))
+    audit["score_version"] = version
+    raw = json.loads(audit.pop("breakdown_json") or "{}")
+    audit["breakdown"] = normalize_breakdown(raw, version)
+    audit["priorities"] = json.loads(audit.pop("priorities_json") or "[]")
+    audit["failures"] = json.loads(audit.pop("failures_json") or "[]")
+    return audit
+
+
 def site_payload(site):
-    audit = one("SELECT * FROM audits WHERE site_id=? ORDER BY id DESC", (site["id"],))
-    if audit:
-        audit["breakdown"] = json.loads(audit.pop("breakdown_json") or "{}")
-        audit["priorities"] = json.loads(audit.pop("priorities_json") or "[]")
-        audit["failures"] = json.loads(audit.pop("failures_json") or "[]")
+    audits = [present_audit(a) for a in rows(
+        "SELECT * FROM audits WHERE site_id=? ORDER BY run_at, id", (site["id"],))]
+    v1 = split_series(audits, 1)
+    # `audit` is the v2 series head only. A v1 row must not fill this slot.
     baselines = rows("SELECT * FROM baseline_snapshots WHERE site_id=? ORDER BY engine, metric",
                      (site["id"],))
     return {
         **site,
-        "audit": audit,
+        "audit": current_v2(audits),
+        "audit_v1": v1[-1] if v1 else None,
+        "audits": audits,
         "baseline_count": len(baselines),
         "baseline_status": "有快照" if baselines else "尚无采样",
         "findings_count": one("SELECT COUNT(*) c FROM findings WHERE site_id=?",

@@ -35,6 +35,7 @@ create table if not exists public.audits (
     site_id bigint not null references public.sites(id),
     run_at text,
     score integer,
+    score_version integer not null default 1,
     band text,
     breakdown_json jsonb,
     priorities_json jsonb,
@@ -191,5 +192,9 @@ drop policy if exists anon_read on public.changes;
 create policy anon_read on public.changes for select to anon using (true);
 drop policy if exists anon_read on public.gate_checks;
 create policy anon_read on public.gate_checks for select to anon using (true);
+
+-- audits.score_version: 1 = rubric v1（历史行默认），2 = geo-optimizer 4.19 rubric v2。
+-- 已有库的 CREATE TABLE 不会改列，这里补列；新库 CREATE 已含该列，本句是空操作。
+alter table public.audits add column if not exists score_version integer not null default 1;
 
 commit;

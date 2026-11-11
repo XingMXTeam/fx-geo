@@ -15,6 +15,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from db import connect, init_db
+from rubric import CHECK_KEYS as BREAKDOWN_KEY, CHECK_MAX, check_max
 
 GOALS = os.path.expanduser("~/workspace/goals/1")
 AUDIT_DIR = os.path.join(GOALS, "hidden_files/geo-p0/audit-2026-11-02")
@@ -22,11 +23,10 @@ PROMPT_MD = os.path.join(GOALS, "files/GEO-P0-prompt集冻结v1-2026-11-02.md")
 SEED_DATE = "2026-11-02"
 
 CATEGORY_MAP = {"品类通用": "品类", "使用场景": "场景", "竞品对比": "对比", "决策类": "决策", "品牌直查": "品牌"}
-CHECK_MAX = {"robots_txt": 18, "llms_txt": 18, "schema_jsonld": 16, "meta_tags": 14,
-             "content": 12, "signals": 6, "ai_discovery": 6, "brand_entity": 10}
-BREAKDOWN_KEY = {"robots_txt": "robots", "llms_txt": "llms", "schema_jsonld": "schema",
-                 "meta_tags": "meta", "content": "content", "signals": "signals",
-                 "ai_discovery": "ai_discovery", "brand_entity": "brand_entity"}
+# CHECK_MAX is rubric v2 (the live default). These files are geo-optimizer 4.18.3, so they stay v1.
+HISTORICAL_AUDIT_SCORE_VERSION = 1
+if CHECK_MAX["google_ai"] != 20 or "google_ai" in check_max(HISTORICAL_AUDIT_SCORE_VERSION):
+    raise RuntimeError("v2 CHECK_MAX must not be applied to historical v1 audits")
 
 
 def load_audit(fname):
@@ -98,19 +98,24 @@ def main():
         site_id[domain] = cur.lastrowid
 
     # ---- audits（解析真实审计 JSON）----
-    audit_note = "卫生分，不预测引用（geo-optimizer 作者预注册校准研究：审计分与实际引用无预测关系）"
+    audit_note = (
+        "score_version=v1 卫生分，不预测引用，也不是 AI 引用率、提及率或发现率"
+        "（geo-optimizer 4.18.3；作者预注册校准研究：审计分与实际引用无预测关系）"
+    )
+    historical_max = check_max(HISTORICAL_AUDIT_SCORE_VERSION)
     for domain, fname in [("maoxunxing.com", "audit-maoxunxing.json"),
                           ("crossagent.maoxunxing.com", "audit-crossagent.json")]:
         d = load_audit(fname)
         breakdown = {}
         for chk_key, short in BREAKDOWN_KEY.items():
             chk = d.get("checks", {}).get(chk_key, {})
-            breakdown[short] = {"score": chk.get("score"), "max": CHECK_MAX[chk_key]}
+            breakdown[short] = {"score": chk.get("score"), "max": historical_max[chk_key]}
         breakdown["negative_penalty"] = d.get("score_breakdown", {}).get("negative_penalty")
         cur.execute(
-            "INSERT INTO audits(site_id,run_at,score,band,breakdown_json,priorities_json,failures_json,source_file,note)"
-            " VALUES(?,?,?,?,?,?,?,?,?)",
-            (site_id[domain], d.get("timestamp"), d.get("score"), d.get("band"),
+            "INSERT INTO audits(site_id,run_at,score,score_version,band,breakdown_json,"
+            "priorities_json,failures_json,source_file,note) VALUES(?,?,?,?,?,?,?,?,?,?)",
+            (site_id[domain], d.get("timestamp"), d.get("score"), HISTORICAL_AUDIT_SCORE_VERSION,
+             d.get("band"),
              json.dumps(breakdown, ensure_ascii=False),
              json.dumps(d.get("recommendations", [])[:5], ensure_ascii=False),
              json.dumps(audit_failures(d), ensure_ascii=False),
@@ -163,11 +168,11 @@ def main():
         (ca, None, "L1", "robots 缺 Bingbot / Googlebot / Claude-SearchBot 具名行",
          "robots.txt 原文：具名行只有 OAI-SearchBot / GPTBot / ChatGPT-User / ClaudeBot / PerplexityBot；审计 robots_txt citation_bots_explicit = false",
          "当前靠 User-agent: * Allow: / 兜底，有效但具名化更稳。", "normal", "robots.txt 直抓 2026-11-02"),
-        (mx, None, "L1", "ai_discovery 0/6（低优先级）",
-         "审计 ai_discovery：0/6，缺 /.well-known/ai.txt、/ai/summary.json、/ai/faq.json",
+        (mx, None, "L1", "ai_discovery 0/6（score_version=v1，低优先级）",
+         "审计 ai_discovery：0/6（score_version=v1），缺 /.well-known/ai.txt、/ai/summary.json、/ai/faq.json",
          "工具口径卫生项，价值未证，不当增长项。", "low", "geo-optimizer 审计 2026-11-02"),
-        (ca, None, "L1", "ai_discovery 0/6（低优先级）",
-         "审计 ai_discovery：0/6，缺 /.well-known/ai.txt、/ai/summary.json、/ai/faq.json",
+        (ca, None, "L1", "ai_discovery 0/6（score_version=v1，低优先级）",
+         "审计 ai_discovery：0/6（score_version=v1），缺 /.well-known/ai.txt、/ai/summary.json、/ai/faq.json",
          "工具口径卫生项，价值未证，不当增长项。", "low", "geo-optimizer 审计 2026-11-02"),
         (None, "两站", "L3", "GSC 未接入（数据缺）",
          "token.json 文件不在磁盘上（~/.config/mcp-gsc/ 为空）；client_secrets 尚在",
@@ -197,7 +202,7 @@ def main():
              control_group="无同模板对照组：用 CausalImpact 前后对比 + 同口径复测",
              cost="约 1 小时工时，无 API 成本",
              stop_condition="28 天判定采样引用率无变化 → 记无效结论，30 天内不再立同类假设",
-             hygiene_note="卫生复核：审计 llms_txt 分类分（当前两站均 10/18）只作复核记录，不作主指标"),
+             hygiene_note="卫生复核：审计 llms_txt 分类分（score_version=v1，两站均 10/18）只作复核记录，不作主指标"),
         dict(code="H-002", site_id=ca, scope="CrossAgent Lab", title="Lab 首页补 H1",
              layer="L1",
              hypothesis="若给 CrossAgent Lab 首页补上唯一的 H1（明确陈述页面主题），则品牌直查题的实体识别正确率在 28 天内提升；机制：首页无 H1 时引擎缺页面主题锚点，10-29 样板中三引擎对品牌实体无共识。",
@@ -214,7 +219,7 @@ def main():
              layer="L1",
              hypothesis="若给主站补 Organization JSON-LD（name/url/logo）并填真实 sameAs（GitHub 等真实账号页），则品牌直查题对 maoxunxing.com / Felix Mao 的实体识别正确率在 28 天内提升；机制：当前无 Organization schema、KG 支柱为 0，引擎缺实体消歧信号。",
              primary_metric="品牌直查题（主站冻结集 Q23–25）实体识别正确率（判定采样 ≥5 次/引擎）",
-             baseline_value="审计 brand_entity 5/10、kg_pillar_count = 0、无 Organization JSON-LD（2026-11-02 实测）；主站尚无采样基线，采样接入后首轮为基线",
+             baseline_value="审计 brand_entity 5/10（score_version=v1）、kg_pillar_count = 0、无 Organization JSON-LD（2026-11-02 实测）；主站尚无采样基线，采样接入后首轮为基线",
              target="判定采样品牌题正确率较首轮基线提升",
              guardrail="sameAs 只填真实存在的账号页，不编造（证据密度 Linter 把关）；不改其他模板结构",
              threshold="正确率提升 ≥20 个百分点或品牌题全对",
@@ -233,7 +238,7 @@ def main():
              control_group="无对照组：改前/改后 robots 原文留档对比",
              cost="约 0.5 小时工时",
              stop_condition="日志接入后 28 天覆盖率无基线可比 → 关闭并入日志接入事项",
-             hygiene_note="卫生复核：审计 robots_txt 分类分（当前 15/18）只作复核记录，不作主指标"),
+             hygiene_note="卫生复核：审计 robots_txt 分类分（score_version=v1，当前 15/18）只作复核记录，不作主指标"),
     ]
     for h in hyps:
         cur.execute(
@@ -247,8 +252,8 @@ def main():
     # ---- source_status ----
     sources = [
         ("audit", "站点审计（geo-optimizer）", "已接入",
-         "2026-11-02 已实跑双站：主站 62 分、Lab 65 分（卫生分，不预测引用）",
-         "挂 CI / 定时复跑（沙箱需本地 runner 放行 fake-IP）"),
+         "2026-11-02 已实跑双站：主站 62 分、Lab 65 分（score_version=v1，卫生分，不预测引用；不是 v2 基线）",
+         "下一次复跑用 geo-optimizer 4.19 默认口径（score_version=v2）另记一条，不与 v1 分数比；沙箱仍需本地 runner 放行 fake-IP"),
         ("gsc", "Google Search Console", "未接入",
          "token.json 文件已不在磁盘（目录为空，原因不明）；client_secrets 尚在，重授权不用重建应用；应用 Testing 状态 refresh token 约 7 天失效",
          "用户浏览器重新授权一次；恢复后一周内建每日 cron"),
